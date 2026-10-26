@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breaking the Privacy Promise</title>
+<meta name="description" content="Gradient inversion attacks on federated low-rank adapted Vision Transformers: spatially anchored generative inversion with layer-wise trainable positional embeddings.">
+<meta property="og:title" content="Breaking the Privacy Promise: Gradient Inversion Attacks on Federated Low-Rank Adapted Vision Transformers">
+<meta property="og:description" content="LoRA-based PEFT does not, by itself, prevent data leakage in federated learning.">
+<meta property="og:image" content="static/img/concept2.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="../static/css/paper.css">
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">◐</button>
+
+<header class="wrap">
+  <!-- TODO: change to "WACV 2027" once the paper is accepted -->
+  <div class="venue">WACV 2027</div>
+  <h1>Breaking the Privacy Promise: Gradient Inversion Attacks on Federated Low-Rank Adapted Vision Transformers</h1>
+  <!-- TODO: replace href="#" with each author's homepage -->
+  <p class="authors">
+    <a href="https://www.linkedin.com/in/ritik-kumar-badiya-6428661b4/">Ritik K. Badiya</a>
+    <a href="https://sadimanna.github.io/">Siladittya Manna</a>
+    <a href="https://www.linkedin.com/in/ashmit-sinha-623a20225/">Ashmit Sinha</a>
+    <a href="https://www.linkedin.com/in/yashwanth-mandula-aba700a5/">Yashwanth Mandula</a>
+    <a href="https://www.linkedin.com/in/anirban-chakraborty-629a1833/">Anirban Chakraborty</a>
+  </p>
+  <p class="affil">Indian Institute of Science, Bengaluru, India</p>
+  <p class="email">{ritikbadiya, yashwanthm, siladittyam, anirban}@iisc.ac.in</p>
+
+  <div class="publication-links">
+    <span class="link-block">
+      <a class="external-link button is-normal is-rounded is-dark" href="static/pdf/paper.pdf" target="_blank" rel="noopener noreferrer">
+        <span class="icon"><img src="../static/icons/pdf-document.svg" alt="" aria-hidden="true"></span>
+        <span>Paper</span>
+      </a>
+    </span>
+    <!-- TODO: add arXiv ID -->
+    <span class="link-block">
+      <a class="external-link button is-normal is-rounded is-dark disabled" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">
+        <span class="icon"><img src="../static/icons/Arxiv.svg" alt="" aria-hidden="true"></span>
+        <span>arXiv</span>
+      </a>
+    </span>
+    <!-- TODO: add GitHub repo URL -->
+    <span class="link-block">
+      <a class="external-link button is-normal is-rounded is-dark disabled" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">
+        <span class="icon"><img src="../static/icons/Github.svg" alt="" aria-hidden="true"></span>
+        <span>Code (coming soon)</span>
+      </a>
+    </span>
+    <span class="link-block">
+      <a class="external-link button is-normal is-rounded is-dark" href="#bibtex">
+        <span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg></span>
+        <span>BibTeX</span>
+      </a>
+    </span>
+  </div>
+</header>
+
+<!-- Teaser -->
+<div class="wrap" style="padding-bottom:48px">
+  <figure style="margin-top:24px">
+    <div class="fig" style="max-width:700px;margin:0 auto"><img src="static/img/concept2.png" alt="Several initializations converge to different reconstructions with nearly identical gradients"></div>
+    <figcaption><b>Duplicate solutions in gradient inversion.</b> The gradient-matching objective has many local minima, so different images can produce nearly identical gradients to the private sample. All initializations and reconstructions shown are real samples from our experiments.</figcaption>
+  </figure>
+  <p class="tldr"><b>TL;DR</b> Federated LoRA fine-tuning of ViTs shares only low-rank gradients, but it doesn't stop data leakage. Making positional embeddings trainable in every transformer block gives an honest-but-curious server layer-wise spatial anchors. Combined with a generative prior, these anchors recover private images with high fidelity.</p>
+  <div class="stats">
+    <div class="stat"><b>+10.14 dB</b><span>PSNR on CIFAR-10<br>(GIAS → GIAS+Ours)</span></div>
+    <div class="stat"><b>+0.45</b><span>SSIM on CIFAR-10</span></div>
+    <div class="stat"><b>+7.83 dB</b><span>PSNR on CelebA<br>(128×128)</span></div>
+    <div class="stat"><b>+11.74 dB</b><span>PSNR on CARS<br>(64×64)</span></div>
+  </div>
+</div>
+
+<section class="alt" id="abstract">
+  <div class="wrap">
+    <h2>Abstract</h2>
+    <p>Parameter-efficient fine-tuning (PEFT) has been increasingly adopted to fine-tune pretrained models with low computational cost and is therefore also preferred in the federated learning paradigm to reduce computational and communication overhead. In this work, we investigate the sparsely explored domain of the risk of private data leakage in LoRA-adapted Vision Transformers (ViTs), where low-rank updates weaken the gradient signal available to an honest-but-curious server. We show that reconstruction is limited by two coupled ambiguities: reduced information in LoRA gradients and missing spatial cues from frozen positional embeddings. To address this, we propose a practically plausible spatially anchored generative inversion framework that incorporates trainable positional embeddings into transformer blocks during local fine-tuning. The resulting positional gradients act as layer-wise spatial anchors, while the generative prior keeps reconstructions on a realistic image manifold, reducing twin-data and patch-permutation artifacts. Adding our anchoring to GIAS improves PSNR by 10.14 dB, SSIM by 0.45, and LPIPS by 0.098 on CIFAR-10, with PSNR gains of 7.83 and 11.74 dB on high-resolution CelebA and CARS, respectively. The proposed strategy provides gains at higher batch sizes and in FedAvg settings. These results indicate that LoRA-based PEFT does not, by itself, prevent data leakage in FL and that carefully incorporated positional embeddings can help in exposing private information.</p>
+  </div>
+</section>
+
+<section id="motivation">
+  <div class="wrap">
+    <h2>Why is inverting LoRA gradients hard?</h2>
+    <p>The paper identifies two coupled sources of ambiguity:</p>
+    <ul class="contrib">
+      <li><b>Less information.</b> LoRA updates only a small low-rank subset of parameters, which shrinks the intrinsic dimension of the shared gradients. The observed gradient then no longer uniquely determines the private input.</li>
+      <li><b>No spatial cues.</b> Positional embeddings are frozen and self-attention mixes all tokens, so LoRA gradients don't tie back to specific patch locations. Spatially misaligned, distorted or noisy inputs can satisfy the same gradient constraints. This produces <i>duplicate</i> (twin-data) reconstructions.</li>
+    </ul>
+    <figure style="max-width:750px;margin:24px auto 24px">
+      <div class="fig"><img src="static/img/intrinsic_dimension_comparison.png" alt="Intrinsic dimensionality of gradients, full fine-tuning vs LoRA"></div>
+      <figcaption>Intrinsic dimensionality of gradients from full fine-tuning compared with LoRA-adapted ViT-Small. Fewer trainable parameters means a lower-dimensional gradient manifold.</figcaption>
+    </figure>
+    <h3>Jumbled patches across random restarts (ViT-Small, LoRA r = 128, CIFAR-10)</h3>
+    <div class="panel-card"><div class="grid-scroll"><table class="imgs sm" id="motivGrid"></table></div></div>
+    <figcaption>Three independent initializations per method. Both optimization-based attacks (APRIL, GradViT) and the generative attack GIAS converge to patch-permuted or distorted reconstructions.</figcaption>
+  </div>
+</section>
+
+<section class="alt" id="method">
+  <div class="wrap">
+    <h2>Method: Spatial Anchoring</h2>
+    <p>The server prescribes a ViT in which a <b>trainable positional embedding</b> $p_l$ is added to the input of every transformer encoder layer (except the first), alongside the LoRA adapters. This doesn't change the clients' local training procedure. The architecture also improves task performance and robustness, which gives clients a genuine reason to adopt it. The overhead is small: GFLOPs increase by only 0.016% for ViT-Small.</p>
+    <div class="eq">$$x_{l+1} = \tilde{x}_l + \operatorname{MLP}\!\big(\operatorname{LN}'(\tilde{x}_l)\big),\qquad \tilde{x}_l = \operatorname{MHSA}\!\big(\operatorname{LN}(x_l + p_l)\big) + (x_l + p_l)$$</div>
+    <p>The gradients of $p_l$ now carry explicit, layer-wise spatial information. The attacker builds on the generative GIA framework GIAS. It optimizes a latent code $z$ and then the generator $G_\omega$ so that the gradients of the candidate image $\hat{x} = G_\omega(z)$ match the client's gradients, for both the LoRA/classifier parameters and the positional embeddings:</p>
+    <div class="eq">$$\mathcal{L}_{\text{match}} = d_{\cos}\!\big(\nabla_{\theta'^S}\ell(\hat{y},y),\, g_{\theta'}\big) + d_{\cos}\!\big(\nabla_{\theta^S_{\text{PE}}}\ell(\hat{y},y),\, g_{\text{PE}}\big),\qquad \min_{z,\,G_\omega}\ \mathcal{L}_{\text{match}} + \lambda_{\text{reg}} R_{\text{base}}(z, G_\omega)$$</div>
+    <figure style="max-width:750px;margin:20px auto 24px">
+      <div class="fig"><img src="static/img/wacv_highlevel.png" alt="High-level overview of the generative GIA framework"></div>
+      <figcaption>High-level overview of the generative gradient-inversion framework. $g^C$ and $g^S$ are the client and server gradients.</figcaption>
+    </figure>
+    <!--
+    <figure>
+      <div class="fig"><img src="static/img/wacv2027_schematic.png" alt="Detailed schematic of the proposed attack with layer-wise trainable positional embeddings"></div>
+      <figcaption>Detailed schematic. Step 1 updates $z$ and step 2 updates $G_\omega$. Gradients of the trainable positional embeddings (PE) act as spatial anchors.</figcaption>
+    </figure>
+    -->
+    <h3>Contributions</h3>
+    <ul class="contrib">
+      <li>We show that LoRA-induced parameter sparsity increases the non-identifiability of gradient inversion by reducing the information available to the attacker.</li>
+      <li>We identify frozen positional embeddings as a fundamental source of <i>duplicate</i> reconstructions under PEFT.</li>
+      <li>We design layer-wise trainable positional embeddings for ViTs that expose positional gradients during federated PEFT and consistently improve reconstruction.</li>
+      <li>We evaluate extensively across LoRA ranks, batch sizes, FedSGD and FedAvg, defences and high-resolution datasets.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <h2>Qualitative results</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-panel="p-cifar">CIFAR-10</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-hr">CelebA &amp; CARS</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-batch">Larger batches</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="p-def">Under defences</button>
+    </div>
+    <div class="panel active" id="p-cifar">
+      <div class="panel-card"><div class="grid-scroll"><table class="imgs" id="cifarGrid"></table></div></div>
+      <figcaption>CIFAR-10, ViT-Small, batch size 1. With spatial anchoring, the patch misplacement seen with GIAS disappears.</figcaption>
+    </div>
+    <div class="panel" id="p-hr">
+      <div class="panel-card"><div class="grid-scroll"><table class="imgs" id="hrGrid"></table></div></div>
+      <figcaption>CelebA (128×128) and CARS (64×64). Instance-level identities of faces and cars are recovered, with minimal computational overhead.</figcaption>
+    </div>
+    <div class="panel" id="p-batch">
+      <div class="panel-card"><div class="grid-scroll"><table class="imgs" id="batchGrid"></table></div></div>
+      <figcaption>Single-step setting with LoRA rank 128: four samples each from a batch of 4 and a batch of 16.</figcaption>
+    </div>
+    <div class="panel" id="p-def">
+      <div class="panel-card"><div class="grid-scroll"><table class="imgs sm" id="defGrid"></table></div></div>
+      <figcaption>Gradient-level defences: additive Gaussian noise $\mathcal{N}(\sigma)$, gradient clipping (GC, $C=4$) and both combined. GIAS+Ours holds up under mild noise and clipping. Strong noise degrades both methods.</figcaption>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="quant">
+  <div class="wrap">
+    <h2>Quantitative results</h2>
+    <h3>CIFAR-10, single step, batch size 1</h3>
+    <div class="tbl-scroll"><table class="res">
+      <thead><tr><th>Metric</th><th>APRIL</th><th>+Ours</th><th>Δ</th><th>GradViT</th><th>+Ours</th><th>Δ</th><th>GIAS</th><th>+Ours</th><th>Δ</th></tr></thead>
+      <tbody>
+        <tr><td>PSNR ↑</td><td>12.75 <span class="sd">(2.19)</span></td><td>12.03 <span class="sd">(2.39)</span></td><td class="down">−0.72</td><td>15.03 <span class="sd">(4.68)</span></td><td>16.62 <span class="sd">(4.50)</span></td><td class="up">+1.59</td><td>15.77 <span class="sd">(4.52)</span></td><td class="best">25.91 <span class="sd">(6.29)</span></td><td class="up">+10.14</td></tr>
+        <tr><td>SSIM ↑</td><td>0.40 <span class="sd">(0.152)</span></td><td>0.45 <span class="sd">(0.11)</span></td><td class="up">+0.05</td><td>0.397 <span class="sd">(0.226)</span></td><td>0.48 <span class="sd">(0.266)</span></td><td class="up">+0.083</td><td>0.34 <span class="sd">(0.221)</span></td><td class="best">0.79 <span class="sd">(0.17)</span></td><td class="up">+0.45</td></tr>
+        <tr><td>LPIPS ↓</td><td>0.24 <span class="sd">(0.077)</span></td><td>0.19 <span class="sd">(0.224)</span></td><td class="up">−0.05</td><td>0.124 <span class="sd">(0.05)</span></td><td>0.12 <span class="sd">(0.051)</span></td><td class="up">−0.004</td><td>0.12 <span class="sd">(0.075)</span></td><td class="best">0.022 <span class="sd">(0.033)</span></td><td class="up">−0.098</td></tr>
+      </tbody>
+    </table></div>
+    <p class="tbl-cap">Mean over 10 users with three reconstructions each; standard deviation in parentheses. Green marks an improvement.</p>
+
+    <h3>High-resolution datasets</h3>
+    <div class="tbl-scroll"><table class="res">
+      <thead><tr><th rowspan="2">Method</th><th colspan="3">CelebA (128×128)</th><th colspan="3">CARS (64×64)</th></tr>
+      <tr><th>PSNR ↑</th><th>SSIM ↑</th><th>LPIPS ↓</th><th>PSNR ↑</th><th>SSIM ↑</th><th>LPIPS ↓</th></tr></thead>
+      <tbody>
+        <tr><td>GIAS</td><td>11.71 <span class="sd">(2.8)</span></td><td>0.24 <span class="sd">(0.10)</span></td><td>0.31 <span class="sd">(0.08)</span></td><td>9.04 <span class="sd">(1.89)</span></td><td>0.07 <span class="sd">(0.08)</span></td><td>0.36 <span class="sd">(0.07)</span></td></tr>
+        <tr><td>GIAS + Ours</td><td class="best">19.54 <span class="sd">(3.72)</span></td><td class="best">0.585 <span class="sd">(0.125)</span></td><td class="best">0.125 <span class="sd">(0.082)</span></td><td class="best">20.78 <span class="sd">(3.17)</span></td><td class="best">0.72 <span class="sd">(0.128)</span></td><td class="best">0.089 <span class="sd">(0.058)</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="tbl-cap">&nbsp;</p>
+
+    <h3>Multi-step updates (FedAvg), CIFAR-10, PSNR ↑</h3>
+    <div class="tbl-scroll"><table class="res">
+      <thead><tr><th>Epochs / Batch</th><th>APRIL</th><th>+Ours</th><th>GradViT</th><th>+Ours</th><th>GIAS</th><th>+Ours</th><th>Δ GIAS</th></tr></thead>
+      <tbody>
+        <tr><td>E=1, B=8</td><td>13.41</td><td>13.56</td><td>14.01</td><td>13.91</td><td>11.04</td><td>13.12</td><td class="up">+2.08</td></tr>
+        <tr><td>E=1, B=4</td><td>13.34</td><td>13.79</td><td>14.09</td><td>13.86</td><td>10.82</td><td>13.21</td><td class="up">+2.39</td></tr>
+        <tr><td>E=2, B=8</td><td>13.44</td><td>13.66</td><td>14.01</td><td>13.85</td><td>10.84</td><td>13.23</td><td class="up">+2.39</td></tr>
+        <tr><td>E=2, B=4</td><td>13.40</td><td>13.46</td><td>14.02</td><td>13.82</td><td>10.79</td><td>13.58</td><td class="up">+2.79</td></tr>
+      </tbody>
+    </table></div>
+    <p class="tbl-cap">Each client holds 16 private samples per round, giving E×16/B local steps. The GIAS gain is statistically significant (Welch's t-test, p &lt; 0.05). SSIM and LPIPS are in the paper.</p>
+
+    <h3>Ablations</h3>
+    <figure>
+      <div class="fig"><img src="static/img/cifar10_rankabl_all_metrics.png" alt="Performance across LoRA ranks 16 to 128"></div>
+      <figcaption><b>LoRA rank.</b> Even at r = 16, GIAS+Ours improves PSNR by 10.67 dB and SSIM by 0.507. A lower rank alone doesn't remove the privacy risk.</figcaption>
+    </figure>
+    <figure>
+      <div class="fig"><img src="static/img/cifar10_bsabl_all_metrics.png" alt="Performance across batch sizes 1 to 32"></div>
+      <figcaption><b>Batch size.</b> At batch size 4, GIAS+Ours raises PSNR from 12.10 to 20.97 and SSIM from 0.126 to 0.628. Gains shrink at 16 and 32, where batch averaging dominates the spatial signal, but LPIPS stays lower.</figcaption>
+    </figure>
+
+    <h3>Privacy–utility trade-off</h3>
+    <figure>
+      <div class="fig"><img src="static/img/v2_1x2_psnr_acc.png" alt="Reconstruction PSNR versus test accuracy under gradient perturbation" style="max-width:720px"></div>
+      <figcaption>Over full FedAvg training, stronger gradient perturbation lowers reconstruction PSNR (less leakage) but also lowers test accuracy. PEFTLeak's attack and utility both drop to zero once the poisoned weights change.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="limitations">
+  <div class="wrap">
+    <h2>Limitations</h2>
+    <p>Differential-privacy-style gradient perturbation mitigates the attack, but it costs downstream accuracy. Robustness against stronger adaptive adversaries, and attacks on multi-modal architectures such as vision-language models in heterogeneous federated settings, remain open directions.</p>
+    <h3>Takeaway</h3>
+    <p>PEFT-aware privacy defences should consider not just <i>how many</i> parameters are trainable but <i>what kind of information</i> their gradients expose. In federated ViTs, spatial information matters most.</p>
+  </div>
+</section>
+
+<section class="alt" id="bibtex">
+  <div class="wrap">
+    <h2>BibTeX</h2>
+    <!-- TODO: replace with the arXiv / WACV entry once available -->
+    <div class="bib">
+      <button class="copy" id="copyBib">Copy</button>
+<pre id="bibText">@InProceedings{Badiya_2027_WACV,
+    author    = {Badiya, Ritik K. and Manna, Siladittya and Sinha, Ashmit and
+                 Mandula, Yashwanth and Chakraborty, Anirban},
+    title     = {Breaking the Privacy Promise: Gradient Inversion Attacks on
+                 Federated Low-Rank Adapted Vision Transformers},
+    booktitle = {Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+    month     = {},
+    year      = {2027},
+    pages     = {}
+}</pre>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  Page template inspired by <a href="https://nerfies.github.io" target="_blank" rel="noopener">Nerfies</a>.
+</footer>
+
+<script>
+(function(){
+  // Theme toggle
+  var root = document.documentElement, key = 'pp-theme';
+  try { var t = localStorage.getItem(key); if (t) root.setAttribute('data-theme', t); } catch(e){}
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme') ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(key, next); } catch(e){}
+  });
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(b){ b.setAttribute('aria-selected','false'); });
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      btn.setAttribute('aria-selected','true');
+      document.getElementById(btn.dataset.panel).classList.add('active');
+    });
+  });
+
+  // Grid builder: header = array of {label, span} groups; rows = [{label, ours, cells:[src|null(gap)]}]
+  function build(id, head, rows){
+    var html = '';
+    if (head){
+      html += '<tr><th></th>' + head.map(function(h){
+        return h === null ? '<td class="gap"></td>' : '<th colspan="'+h[1]+'">'+h[0]+'</th>';
+      }).join('') + '</tr>';
+    }
+    rows.forEach(function(r){
+      html += '<tr><th class="row'+(r.ours?' ours':'')+'">'+r.label+'</th>' + r.cells.map(function(c){
+        return c === null ? '<td class="gap"></td>' : '<td><img loading="lazy" src="'+c+'" alt="'+r.label+'"></td>';
+      }).join('') + '</tr>';
+    });
+    document.getElementById(id).innerHTML = html;
+  }
+  function range(n){ return Array.from({length:n}, function(_,i){ return i; }); }
+
+  // CIFAR-10
+  var C = 'static/img/cifar/';
+  build('cifarGrid', null, [
+    {label:'GT', cells: range(8).map(function(i){ return C+'gt_'+i+'.png'; })},
+    {label:'GIAS', cells: range(8).map(function(i){ return C+'gias_'+i+'.png'; })},
+    {label:'GIAS + Ours', ours:true, cells: range(8).map(function(i){ return C+'ours_'+i+'.png'; })}
+  ]);
+
+  // CelebA & CARS
+  var H = 'static/img/hr/', ce=[0,2,5,6], ca=[0,3,4,5];
+  function hr(t){ return ce.map(function(n){ return H+'celeba_'+n+'_'+t+'.png'; }).concat([null], ca.map(function(n){ return H+'cars_'+n+'_'+t+'.png'; })); }
+  build('hrGrid', [['CelebA (128×128)',4], null, ['CARS (64×64)',4]], [
+    {label:'GT', cells: hr('GT')},
+    {label:'GIAS', cells: hr('NPE')},
+    {label:'GIAS + Ours', ours:true, cells: hr('PE')}
+  ]);
+
+  // Larger batches
+  var B = 'static/img/batch/';
+  function bt(t){ return [1,2,3,4].map(function(k){ return B+'b4_'+t+'_'+k+'.png'; }).concat([null], [1,2,3,4].map(function(k){ return B+'b16_'+t+'_'+k+'.png'; })); }
+  build('batchGrid', [['4 of a batch of 4',4], null, ['4 of a batch of 16',4]], [
+    {label:'GT', cells: bt('gt')},
+    {label:'GIAS', cells: bt('gias')},
+    {label:'GIAS + Ours', ours:true, cells: bt('ours')}
+  ]);
+
+  // Defences
+  var D = 'static/img/defense/', defs = ['an_10','an_100','gc','an_gc'];
+  var defRows = [];
+  [7,9].forEach(function(s){
+    defRows.push({label:'GIAS', cells: [D+s+'_gt.png', null].concat(defs.map(function(d){ return D+s+'_gias_'+d+'.png'; }))});
+    defRows.push({label:'GIAS + Ours', ours:true, cells: [D+s+'_gt.png', null].concat(defs.map(function(d){ return D+s+'_ours_'+d+'.png'; }))});
+  });
+  build('defGrid', [['GT',1], null, ['𝒩 (0.01)',1], ['𝒩 (0.1)',1], ['GC',1], ['𝒩 + GC',1]], defRows);
+
+  // Motivation (jumbled patches)
+  var M = 'static/img/motiv/';
+  var mrows = [3,8,2].map(function(l){
+    var cells = [M+'gt_0000_label'+l+'.png', null];
+    ['april','gradvit','gias'].forEach(function(m, mi){
+      [1,2,3].forEach(function(k){ cells.push(M+m+'_rec_0000_label'+l+'_'+k+'.png'); });
+      if (mi < 2) cells.push(null);
+    });
+    return {label:'', cells: cells};
+  });
+  build('motivGrid', [['GT',1], null, ['APRIL (3 restarts)',3], null, ['GradViT (3 restarts)',3], null, ['GIAS (3 restarts)',3]], mrows);
+
+  // BibTeX copy
+  document.getElementById('copyBib').addEventListener('click', function(){
+    var b = this, txt = document.getElementById('bibText').textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function(){
+      b.textContent = 'Copied'; setTimeout(function(){ b.textContent = 'Copy'; }, 1500);
+    }).catch(function(){ b.textContent = 'Select & copy'; });
+  });
+
+  // KaTeX
+  window.addEventListener('load', function(){
+    if (window.renderMathInElement) renderMathInElement(document.body, {
+      delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],
+      ignoredTags:['script','noscript','style','textarea','pre','code']
+    });
+  });
+})();
+</script>
+</body>
+</html>
